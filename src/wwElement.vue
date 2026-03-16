@@ -37,6 +37,7 @@
       @row-drag-enter="onRowDragEnter"
       @column-moved="onColumnMoved"
       @pagination-changed="onPaginationChanged"
+      @row-data-updated="onRowDataUpdated"
     >
     </ag-grid-vue>
   </div>
@@ -253,25 +254,23 @@ export default {
         dataValue.total = newVal.length;
         setData(dataValue);
         scheduleVariableUpdate();
-
-        // Sync selected rows with fresh data so selections stay realtime
-        if (gridApi.value && selectedRows.value && selectedRows.value.length > 0) {
-          nextTick(() => {
-            if (!gridApi.value) return;
-            const currentSelectedIds = new Set();
-            gridApi.value.getSelectedNodes().forEach((node) => {
-              currentSelectedIds.add(node.id);
-            });
-            if (currentSelectedIds.size > 0) {
-              // Re-read selected rows from the grid to get fresh data references
-              const freshSelected = gridApi.value.getSelectedRows() || [];
-              setSelectedRows(freshSelected);
-            }
-          });
-        }
       },
       { immediate: true, deep: true }
     );
+
+    // Sync selected rows AFTER AG Grid has processed the new rowData.
+    // Match by row ID against the fresh source data so values are always realtime.
+    const onRowDataUpdated = () => {
+      if (!gridApi.value) return;
+      const selectedNodes = gridApi.value.getSelectedNodes() || [];
+      if (selectedNodes.length > 0) {
+        const freshRows = selectedNodes.map((node) => node.data);
+        setSelectedRows(freshRows);
+      } else if (selectedRows.value.length > 0) {
+        setSelectedRows([]);
+      }
+      scheduleVariableUpdate();
+    };
 
     const initialState = computed(() => {
       const state = {
@@ -462,6 +461,7 @@ export default {
       onRowDragged,
       onRowDragEnter,
       onColumnMoved,
+      onRowDataUpdated,
       initialState,
       refreshData,
       rowData,
