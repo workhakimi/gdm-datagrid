@@ -150,6 +150,10 @@ export default {
         readonly: true,
       });
 
+    // Track selected row IDs independently so selection survives data refreshes
+    const _selectedIds = new Set();
+    let _suppressSelectionEvent = false;
+
     const onGridReady = (params) => {
       gridApi.value = params.api;
       const columns = params.api.getAllGridColumns();
@@ -259,16 +263,36 @@ export default {
     );
 
     // Sync selected rows AFTER AG Grid has processed the new rowData.
-    // Match by row ID against the fresh source data so values are always realtime.
+    // Re-select by tracked IDs so selection persists across data refreshes,
+    // and update selectedRows with the latest data.
     const onRowDataUpdated = () => {
       if (!gridApi.value) return;
-      const selectedNodes = gridApi.value.getSelectedNodes() || [];
-      if (selectedNodes.length > 0) {
-        const freshRows = selectedNodes.map((node) => node.data);
-        setSelectedRows(freshRows);
+
+      if (_selectedIds.size > 0) {
+        _suppressSelectionEvent = true;
+        // Re-select rows that match tracked IDs
+        gridApi.value.forEachNode(node => {
+          const shouldSelect = _selectedIds.has(String(node.id));
+          if (node.isSelected() !== shouldSelect) {
+            node.setSelected(shouldSelect);
+          }
+        });
+        _suppressSelectionEvent = false;
+
+        // Update selectedRows with fresh data
+        const freshSelected = gridApi.value.getSelectedRows() || [];
+        setSelectedRows(freshSelected);
+
+        // Prune IDs that no longer exist in the data
+        const existingIds = new Set();
+        gridApi.value.forEachNode(node => existingIds.add(String(node.id)));
+        for (const id of _selectedIds) {
+          if (!existingIds.has(id)) _selectedIds.delete(id);
+        }
       } else if (selectedRows.value.length > 0) {
         setSelectedRows([]);
       }
+
       scheduleVariableUpdate();
     };
 
@@ -325,8 +349,14 @@ export default {
     };
 
     const onSelectionChanged = (event) => {
-      if (!gridApi.value) return;
+      if (!gridApi.value || _suppressSelectionEvent) return;
       const selected = gridApi.value.getSelectedRows() || [];
+      // Update tracked IDs
+      _selectedIds.clear();
+      selected.forEach(row => {
+        const id = resolveMappingFormula(props.content.idFormula, row);
+        if (id != null) _selectedIds.add(String(id));
+      });
       setSelectedRows(selected);
     };
 
