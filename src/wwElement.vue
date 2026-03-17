@@ -153,6 +153,7 @@ export default {
     // Track selected row IDs independently so selection survives data refreshes
     const _selectedIds = new Set();
     let _suppressSelectionEvent = false;
+    let _suppressTimer = null;
 
     const onGridReady = (params) => {
       gridApi.value = params.api;
@@ -294,8 +295,12 @@ export default {
         setSelectedRows([]);
       }
 
-      // Release suppression after re-selection is complete
-      _suppressSelectionEvent = false;
+      // Delay releasing suppression so late onSelectionChanged events don't clear tracked IDs
+      if (_suppressTimer) clearTimeout(_suppressTimer);
+      _suppressTimer = setTimeout(() => {
+        _suppressSelectionEvent = false;
+        _suppressTimer = null;
+      }, 1500);
       scheduleVariableUpdate();
     };
 
