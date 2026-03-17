@@ -253,6 +253,9 @@ export default {
     watch(
       rowData,
       (newVal) => {
+        // Suppress selection events while AG Grid processes new data
+        // to prevent onSelectionChanged from clearing tracked IDs
+        if (_selectedIds.size > 0) _suppressSelectionEvent = true;
         const dataValue = { ...data.value };
         dataValue.allData = newVal;
         dataValue.total = newVal.length;
@@ -269,7 +272,6 @@ export default {
       if (!gridApi.value) return;
 
       if (_selectedIds.size > 0) {
-        _suppressSelectionEvent = true;
         // Re-select rows that match tracked IDs
         gridApi.value.forEachNode(node => {
           const shouldSelect = _selectedIds.has(String(node.id));
@@ -277,7 +279,6 @@ export default {
             node.setSelected(shouldSelect);
           }
         });
-        _suppressSelectionEvent = false;
 
         // Update selectedRows with fresh data
         const freshSelected = gridApi.value.getSelectedRows() || [];
@@ -293,6 +294,8 @@ export default {
         setSelectedRows([]);
       }
 
+      // Release suppression after re-selection is complete
+      _suppressSelectionEvent = false;
       scheduleVariableUpdate();
     };
 
